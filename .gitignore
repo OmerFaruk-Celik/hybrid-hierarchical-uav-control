@@ -1,0 +1,63 @@
+# ROS 2
+build/
+install/
+log/
+*.pyc
+__pycache__/
+*.so
+*.o
+
+# Python
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# PX4
+.vscode/
+*.pdb
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Temporary files
+/tmp/
+*.tmp
+*.log
+*.bak
+*.backup
+
+# Gazebo
+~/.gazebo/
+
+# Build artifacts
+*.a
+*.lib
+*.dll
+*.exe
+
+# Documentation builds
+docs/_build/
+docs/.doctrees/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
