@@ -10,7 +10,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 # --- PX4 MESAJ TİPLERİ ---
 from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleCommand
 from px4_msgs.msg import SensorCombined        # Jiroskop/İvmeölçer
-from px4_msgs.msg import VehicleGlobalPosition # GÜNCELLEME: GPS için en garantisi bu
+from px4_msgs.msg import VehicleGlobalPosition # GPS
 from px4_msgs.msg import VehicleLocalPosition  # Konum ve Hız
 from px4_msgs.msg import BatteryStatus         # Batarya
 
@@ -18,7 +18,7 @@ class SafeSwarmController(Node):
     def __init__(self):
         super().__init__('safe_swarm_node')
 
-        # PX4 QoS Ayarları (Veri alamazsan burası kritiktir)
+        # PX4 QoS Ayarları (Best Effort Olmalı)
         self.qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
@@ -27,8 +27,6 @@ class SafeSwarmController(Node):
         )
 
         self.active_drones = {}
-        
-        # Telemetri Değişkenleri
         self.monitor_sub = None       
         self.print_counter = 0        
         self.monitoring_info = ""     
@@ -37,7 +35,11 @@ class SafeSwarmController(Node):
         self.timer = self.create_timer(0.1, self.timer_callback)
 
     def get_drone_namespace(self, vehicle_id):
-        if vehicle_id == 0: return ""
+        # PX4 genelde id 0 için boş, id 1 için /px4_1 kullanır ama
+        # ROS 2 köprüsünde standart olarak px4_1, px4_2 diye gider.
+        # Bu kısım Agent yapılandırmana göre değişebilir. 
+        # Standart çoklu araç simülasyonunda:
+        if vehicle_id == 0: return "" # veya "/px4_1" olabilir duruma göre
         return f"/px4_{vehicle_id}"
 
     # --- KONTROL KISMI ---
@@ -45,28 +47,40 @@ class SafeSwarmController(Node):
         ns = self.get_drone_namespace(vehicle_id)
         prefix = f"{ns}/fmu/in"
         
-        print(f"\n[SİSTEM] Drone {vehicle_id} Bağlanıyor... (Başlangıç: {start_x}, {start_y})")
+        print(f"\n[SİSTEM] Drone {vehicle_id} Bağlanıyor... (Hedef: {start_x}, {start_y})")
 
         offboard_pub = self.create_publisher(OffboardControlMode, f'{prefix}/offboard_control_mode', self.qos_profile)
         traj_pub = self.create_publisher(TrajectorySetpoint, f'{prefix}/trajectory_setpoint', self.qos_profile)
         cmd_pub = self.create_publisher(VehicleCommand, f'{prefix}/vehicle_command', self.qos_profile)
 
+        # Hedeflenen koordinat (NED formatı: Z negatif yukarıdır)
+        target_z = -5.0
+
         self.active_drones[vehicle_id] = {
             'pubs': {'offboard': offboard_pub, 'traj': traj_pub, 'cmd': cmd_pub},
-            'target': [float(start_x), float(start_y), -5.0], 
+            'target': [float(start_x), float(start_y), target_z], 
             'state': 'INIT'
         }
 
-        time.sleep(0.5)
+        # --- KRİTİK GÜNCELLEME: Sinyal Bekleme Süresi ---
+        print(f"[BEKLİYOR] Drone {vehicle_id} için Offboard sinyali gönderiliyor (3sn)...")
+        # PX4'ün Offboard moduna geçmesi için önce bir süre sinyal alması şarttır.
+        time.sleep(3.0)
+
+        print(f"[KOMUT] Drone {vehicle_id} -> Offboard Modu")
         self.set_mode_offboard(vehicle_id)
-        time.sleep(0.5)
+        time.sleep(1.0)
+        
+        print(f"[KOMUT] Drone {vehicle_id} -> Arm (Motor Başlat)")
         self.arm_vehicle(vehicle_id)
-        print(f"[BAŞARILI] Drone {vehicle_id} Motorları Çalıştırdı ve Yükseliyor!")
+        print(f"[BAŞARILI] Drone {vehicle_id} Havalanıyor!")
 
     def timer_callback(self):
+        # Tüm aktif dronlara sürekli kalp atışı (heartbeat) ve hedef konumu gönder
         timestamp = int(self.get_clock().now().nanoseconds / 1000)
 
         for v_id, drone_data in self.active_drones.items():
+            # 1. Offboard Sinyali
             msg_mode = OffboardControlMode()
             msg_mode.position = True
             msg_mode.velocity = False
@@ -74,15 +88,17 @@ class SafeSwarmController(Node):
             msg_mode.timestamp = timestamp
             drone_data['pubs']['offboard'].publish(msg_mode)
 
+            # 2. Hedef Konum (Trajectory)
             msg_traj = TrajectorySetpoint()
             msg_traj.position = drone_data['target']
             msg_traj.yaw = 0.0 
+            # Velocity ve Acceleration NaN olmalı (sadece pozisyon kontrolü için)
             msg_traj.velocity = [float('nan'), float('nan'), float('nan')]
             msg_traj.acceleration = [float('nan'), float('nan'), float('nan')]
             msg_traj.timestamp = timestamp
             drone_data['pubs']['traj'].publish(msg_traj)
 
-    # --- TELEMETRİ İZLEME KISMI (DÜZELTİLDİ) ---
+    # --- TELEMETRİ İZLEME KISMI ---
     def start_monitoring(self, drone_id, data_type):
         if self.monitor_sub:
             self.destroy_subscription(self.monitor_sub)
@@ -96,42 +112,31 @@ class SafeSwarmController(Node):
         callback_func = None
         msg_type = None
 
-        # 1. Jiroskop (Topic listende _v1 yoktu, düz kullanıyoruz)
         if data_type == "jiroskop":
             topic_name = f"{prefix}/sensor_combined"
             msg_type = SensorCombined
             callback_func = self.cb_gyro
-        
-        # 2. GPS (Listende vehicle_global_position var, bunu kullanacağız)
         elif data_type == "gps":
             topic_name = f"{prefix}/vehicle_global_position" 
             msg_type = VehicleGlobalPosition
             callback_func = self.cb_gps
-            
-        # 3. Konum (Listende _v1 VARDI, o yüzden _v1 ekledik)
         elif data_type == "konum":
-            topic_name = f"{prefix}/vehicle_local_position_v1" 
+            topic_name = f"{prefix}/vehicle_local_position" 
             msg_type = VehicleLocalPosition
             callback_func = self.cb_pos
-            
-        # 4. Hız (Konum ile aynı mesaj)
         elif data_type == "hiz":
-            topic_name = f"{prefix}/vehicle_local_position_v1"
+            topic_name = f"{prefix}/vehicle_local_position"
             msg_type = VehicleLocalPosition
             callback_func = self.cb_vel
-            
-        # 5. Batarya (Listende _v1 VARDI)
         elif data_type == "batarya":
-            topic_name = f"{prefix}/battery_status_v1"
+            topic_name = f"{prefix}/battery_status"
             msg_type = BatteryStatus
             callback_func = self.cb_bat
-            
         else:
             print(f"HATA: '{data_type}' geçersiz. (jiroskop, gps, konum, hiz, batarya)")
             return
 
         print(f"\033[94m>>> Drone {drone_id} [{data_type.upper()}] verisi ({topic_name}) izleniyor...\033[0m")
-        # Abone ol
         self.monitor_sub = self.create_subscription(msg_type, topic_name, callback_func, self.qos_profile)
         self.monitoring_info = f"Drone {drone_id} - {data_type.upper()}"
 
@@ -144,7 +149,6 @@ class SafeSwarmController(Node):
     def cb_gps(self, msg):
         self.print_counter += 1
         if self.print_counter % 5 == 0:
-            # VehicleGlobalPosition direk derece verir, 1e7 bölmeye gerek YOKTUR (SensorGps'ten farkı budur)
             print(f"\033[93m[{self.monitoring_info}] Lat:{msg.lat:.6f} Lon:{msg.lon:.6f} Alt:{msg.alt:.2f}m\033[0m")
 
     def cb_pos(self, msg):
@@ -185,7 +189,9 @@ class SafeSwarmController(Node):
         msg.command = command
         msg.param1 = p1
         msg.param2 = p2
-        msg.target_system = int(v_id) + 1
+        # Hedef sistem ID (Genelde drone ID + 1'dir. px4_1 -> ID 2 gibi)
+        # Eğer simülasyon standardı değişmişse burayı kontrol etmek gerekebilir.
+        msg.target_system = int(v_id) + 1 
         msg.target_component = 1
         msg.from_external = True
         msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
@@ -208,10 +214,10 @@ def main():
     threading.Thread(target=rclpy.spin, args=(node,), daemon=True).start()
 
     print("=========================================")
-    print("   SWARM KONTROL VE TELEMETRİ v4.2       ")
+    print("   SWARM KONTROL VE TELEMETRİ v9.0       ")
     print("=========================================")
     print("1. KONTROL KOMUTLARI (4 Parametre):")
-    print("   [id] [x] [y] [z]   -> Örn: 1 0 0 -5")
+    print("   [id] [x] [y] [z]   -> Örn: 1 0 0 -5 (Yükseklik negatiftir!)")
     print("\n2. İZLEME KOMUTLARI (2 Parametre):")
     print("   [id] [veri]        -> Örn: 0 gps")
     print("   Veri Tipleri: jiroskop, gps, konum, hiz, batarya")
