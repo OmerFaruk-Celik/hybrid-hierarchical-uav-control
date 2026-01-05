@@ -186,7 +186,7 @@ def mission_group_attack(node):
     # 1. Hedefe Git
     node.update_target(4, target_x, target_y, CRUISE_ALTITUDE)
     node.update_target(5, target_x, target_y - 10, CRUISE_ALTITUDE)
-    time.sleep(30) # Daha uzak olduğu için uzun süre
+    time.sleep(25) # Daha uzak olduğu için uzun süre
 
     # 2. Dalış Manevrası
     print("[GRUP C] HEDEF TESPİT EDİLDİ! DALIŞA GEÇİLİYOR!")
@@ -201,7 +201,7 @@ def mission_group_attack(node):
     # Hızlı Yükseliş
     node.update_target(4, target_x, target_y, CRUISE_ALTITUDE)
     node.update_target(5, target_x, target_y - 10, CRUISE_ALTITUDE)
-    time.sleep(15)
+    time.sleep(10)
     
     print("[GRUP C] Operasyon başarılı.")
 
@@ -222,11 +222,11 @@ def run_mission_manager(node):
         # 2. TOPLU KALKIŞ
         print("\n>>> FAZ 1: TOPLU KALKIŞ (Hedef: 30m)")
         print("Sinyaller oturtuluyor (5sn)...")
-        time.sleep(10)
+        time.sleep(5)
         
         for i in range(6):
             node.takeoff_drone(i)
-            time.sleep(1.5)
+            time.sleep(0.5)
         
         print("İrtifaya çıkılıyor (15sn)...")
         time.sleep(15)
@@ -261,12 +261,12 @@ def run_mission_manager(node):
             node.update_target(v_id, home[0], home[1], CRUISE_ALTITUDE)
         
         print("Üsse dönülüyor (30sn)...")
-        time.sleep(50)
+        time.sleep(30)
 
         # 5. İNİŞ
         print("\n>>> FAZ 4: İNİŞ")
         node.land_all()
-        time.sleep(20)
+        time.sleep(10)
         print("[SON] Görev başarıyla tamamlandı.")
 
     except KeyboardInterrupt:

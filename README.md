@@ -1,34 +1,51 @@
-# ROS 2 Multi-Drone Simulation System
+# ROS 2 Multi-Drone Simulation System - Teknik Rapor
 
 [![ROS 2](https://img.shields.io/badge/ROS%202-Humble-blue.svg)](https://docs.ros.org/en/humble/)
 [![PX4](https://img.shields.io/badge/PX4-Autopilot-orange.svg)](https://px4.io/)
 [![Gazebo](https://img.shields.io/badge/Gazebo-Harmonic-green.svg)](https://gazebosim.org/)
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
 
-Çoklu drone simülasyonu için ROS 2, PX4 Autopilot ve Gazebo Harmonic kullanan otomatik başlatma ve kontrol sistemi.
-
 ## 📋 İçindekiler
 
-- [ADIM 1: Gerekli Kurulumlar](#adim-1-gerekli-kurulumlar-gazebo-harmonic--araçlar)
-- [ADIM 2: ROS 2 Çalışma Alanı ve px4_msgs](#adim-2-ros-2-çalışma-alanı-ve-px4_msgs)
-- [ADIM 3: Otomasyon Scripti (baslat.sh)](#adim-3-otomasyon-scripti-baslatsh)
-- [ADIM 4: Python Kontrol Kodu (multi_test.py)](#adim-4-python-kontrol-kodu-multi_testpy)
-- [ADIM 5: Çalıştırma](#adim-5-çalıştırma)
+1. [Özet](#özet)
+2. [Kurulum Kılavuzu](#kurulum-kılavuzu)
+3. [Sistem Mimarisi](#sistem-mimarisi)
+4. [Görev Senaryoları](#görev-senaryoları)
+5. [Görsel Dokümantasyon](#görsel-dokümantasyon)
+6. [Test Sonuçları](#test-sonuçları)
+7. [Sorun Giderme](#sorun-giderme)
 
 ---
 
-## ADIM 1: Gerekli Kurulumlar (Gazebo Harmonic & Araçlar)
+## Özet
 
-Öncelikle sistemin temizlenmesi ve yeni nesil Gazebo'nun (Harmonic) kurulması gerekti.
+Bu proje, ROS 2 Humble, PX4 Autopilot ve Gazebo Harmonic kullanarak çoklu drone simülasyonu ve otomatik görev yönetimi sistemidir. Sistem, 4-6 drone'un eş zamanlı kontrolünü, formasyon uçuşunu, alan taramasını ve paralel görev yürütmeyi desteklemektedir.
 
-### 1. Tmux ve Araçların Kurulumu
+### Temel Özellikler
+
+- ✅ **Çoklu Drone Kontrolü**: 4-6 drone'un eş zamanlı yönetimi
+- ✅ **Otomatik Formasyon**: Kare, çizgi ve üçgen formasyon desteği
+- ✅ **Alan Tarama**: Grid pattern ile sistematik alan taraması
+- ✅ **Paralel Görev Yürütme**: Threading ile eş zamanlı multi-mission desteği
+- ✅ **Otomatik Başlatma**: Tek komutla tüm sistemin başlatılması
+- ✅ **Gerçek Zamanlı Telemetri**: Konum, hız, batarya ve GPS takibi
+
+---
+
+## Kurulum Kılavuzu
+
+### ADIM 1: Gerekli Kurulumlar (Gazebo Harmonic & Araçlar)
+
+#### 1.1. Temel Araçların Kurulumu
 
 ```bash
 sudo apt update
 sudo apt install tmux expect git -y
 ```
 
-### 2. Gazebo Harmonic Kurulumu (Eski Gazebo Classic yerine)
+#### 1.2. Gazebo Harmonic Kurulumu
+
+Eski Gazebo Classic yerine yeni nesil Gazebo Harmonic kurulmalıdır:
 
 ```bash
 sudo apt-get install lsb-release gnupg curl -y
@@ -38,13 +55,13 @@ sudo apt-get update
 sudo apt-get install gz-harmonic -y
 ```
 
-### 3. Python Bağımlılıkları
+#### 1.3. Python Bağımlılıkları
 
 ```bash
 pip3 install kconfiglib jinja2 jsonschema
 ```
 
-### 4. PX4 Derlemesi (Eski derlemeyi temizleyip yeni GZ için hazırlık)
+#### 1.4. PX4 Autopilot Kurulumu ve Derleme
 
 ```bash
 cd ~/PX4-Autopilot
@@ -53,165 +70,54 @@ make distclean
 make px4_sitl gz_x500
 ```
 
+**Not**: İlk derleme 10-15 dakika sürebilir.
+
 ---
 
-## ADIM 2: ROS 2 Çalışma Alanı ve px4_msgs
+### ADIM 2: ROS 2 Çalışma Alanı ve px4_msgs
 
-Python kodunun çalışması için PX4 mesaj tiplerinin ROS 2 ortamına tanıtılması gerekti.
-
-### 1. Çalışma alanı oluşturma (varsa geç)
+#### 2.1. Çalışma Alanı Oluşturma
 
 ```bash
 mkdir -p ~/ros2_drone_ws/src
 cd ~/ros2_drone_ws/src
 ```
 
-### 2. px4_msgs paketini indirme
+#### 2.2. px4_msgs Paketini İndirme
 
 ```bash
 git clone https://github.com/PX4/px4_msgs.git
 ```
 
-### 3. Derleme (Build)
+#### 2.3. Derleme (Build)
 
 ```bash
 cd ~/ros2_drone_ws
 colcon build
 ```
 
-### 4. Ortamı kaynaklama
+#### 2.4. Ortamı Kaynaklama
 
 ```bash
 source install/setup.bash
 ```
 
----
-
-## ADIM 3: Otomasyon Scripti (baslat.sh)
-
-Bu script şunları yapar:
-
-- **Otomatik IP**: Bilgisayarın ağ IP'sini bulur
-- **Agresif Temizlik**: Arkada kalan zombi süreçleri öldürür
-- **Güvenlik İptali**: NAV_DLL_ACT 0 vb. ile kumanda/GCS olmadan uçuş izni verir
-- **Tmux**: Ekranı böler, Agent'ı ve 4 drone'u (1 Master GUI + 3 Slave Headless) başlatır
-
-**Dosya Konumu**: `~/ros2_drone_ws/baslat.sh`
+**Kalıcı kaynaklama için** `~/.bashrc` dosyasına ekleyin:
 
 ```bash
-#!/bin/bash
-
-# --- AYARLAR ---
-PX4_DIR="$HOME/PX4-Autopilot"
-ROS_WS="$HOME/ros2_drone_ws"
-PYTHON_SCRIPT="src/multi_test.py"
-SESSION_NAME="drone_sim"
-BUILD_PATH="./build/px4_sitl_default"
-
-# --- OTOMATİK IP TESPİTİ ---
-GCS_IP=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+')
-if [ -z "$GCS_IP" ]; then GCS_IP=$(hostname -I | awk '{print $1}'); fi
-if [ -z "$GCS_IP" ]; then GCS_IP="127.0.0.1"; fi
-
-# --- DÜNYA VE MODEL ---
-WORLD_NAME="baylands"
-MODEL_NAME="x500"
-SYS_AUTOSTART="4001"
-
-# Tmux Kontrol
-if ! command -v tmux &> /dev/null; then echo "HATA: tmux kurmalısın."; exit 1; fi
-
-echo "---------------------------------------------------"
-echo "   SİMÜLASYON - ORTAM: $WORLD_NAME | IP: $GCS_IP"
-echo "---------------------------------------------------"
-
-# 1. TEMİZLİK
-pkill -9 -f px4
-pkill -9 -f gz-sim
-pkill -9 -f ignite
-pkill -9 -f ruby
-pkill -9 -f MicroXRCEAgent
-pkill -9 -f multi_test.py
-tmux kill-session -t $SESSION_NAME 2>/dev/null
-sleep 3
-
-# 2. OTURUM AÇMA
-tmux new-session -d -s $SESSION_NAME -x 240 -y 60
-tmux split-window -t $SESSION_NAME:0 -v
-tmux split-window -t $SESSION_NAME:0.0 -h
-tmux split-window -t $SESSION_NAME:0.1 -h
-tmux split-window -t $SESSION_NAME:0.2 -v
-tmux split-window -t $SESSION_NAME:0.3 -v
-tmux select-layout -t $SESSION_NAME:0 tiled
-
-# 3. BAŞLATMA
-# Pane 0: Agent
-tmux send-keys -t $SESSION_NAME:0.0 "MicroXRCEAgent udp4 -p 8888" C-m
-# Pane 1: ROS 2 Setup
-tmux send-keys -t $SESSION_NAME:0.1 "source /opt/ros/humble/setup.bash" C-m
-tmux send-keys -t $SESSION_NAME:0.1 "source $ROS_WS/install/local_setup.bash" C-m
-tmux send-keys -t $SESSION_NAME:0.1 "export RMW_IMPLEMENTATION=rmw_fastrtps_cpp" C-m
-tmux send-keys -t $SESSION_NAME:0.1 "cd $ROS_WS; clear; echo 'ROS 2 Hazır.'" C-m
-
-launch_drone_tmux() {
-    local PANE_IDX=$1; local ID=$2; local X=$3; local Y=$4; local MAV_PORT=$5
-    local TARGET="$SESSION_NAME:0.$PANE_IDX"
-    local EXP_FILE="/tmp/start_drone_${ID}.exp"
-    local DELAY=2
-    if [ "$ID" -gt 0 ]; then DELAY=25; fi 
-
-    if [ "$ID" -eq 0 ]; then
-        # MASTER (GUI)
-        cat > $EXP_FILE <<EOF
-spawn make px4_sitl gz_x500
-set timeout -1
-expect "pxh>" { send "\r" }
-expect "pxh>"
-send "param set NAV_DLL_ACT 0\r"; expect "pxh>"
-send "param set COM_RCL_ACT 0\r"; expect "pxh>"
-send "param set NAV_RCL_ACT 0\r"; expect "pxh>"
-send "mavlink stop-all\r"; expect "pxh>"
-send "mavlink start -x -u 14556 -r 4000000 -t $GCS_IP -o 14550\r"
-interact
-EOF
-    else
-        # SLAVE (HEADLESS)
-        cat > $EXP_FILE <<EOF
-spawn $BUILD_PATH/bin/px4 -i $ID
-set timeout -1
-expect "pxh>" { send "\r" }
-expect "pxh>"
-send "param set NAV_DLL_ACT 0\r"; expect "pxh>"
-send "param set COM_RCL_ACT 0\r"; expect "pxh>"
-send "param set NAV_RCL_ACT 0\r"; expect "pxh>"
-send "mavlink stop-all\r"; expect "pxh>"
-send "mavlink start -x -u $MAV_PORT -r 4000000 -t $GCS_IP -o 14550\r"
-interact
-EOF
-    fi
-
-    tmux send-keys -t $TARGET "sleep $DELAY" C-m
-    tmux send-keys -t $TARGET "cd $PX4_DIR" C-m
-    tmux send-keys -t $TARGET "export PX4_GZ_WORLD=$WORLD_NAME" C-m
-    tmux send-keys -t $TARGET "export PX4_SYS_AUTOSTART=$SYS_AUTOSTART" C-m
-    tmux send-keys -t $TARGET "export PX4_GZ_MODEL=$MODEL_NAME" C-m
-    tmux send-keys -t $TARGET "export PX4_GZ_MODEL_POSE='$X,$Y,0.5,0,0,0'" C-m
-    tmux send-keys -t $TARGET "expect $EXP_FILE" C-m
-}
-
-# Drone'ları Yerleştir
-launch_drone_tmux 2 0 0 0 14556
-launch_drone_tmux 3 1 2 2 14557
-launch_drone_tmux 4 2 -2 2 14558
-launch_drone_tmux 5 3 0 -2 14559
-
-# Python Kontrol Terminali
-gnome-terminal --tab --title="PYTHON KONTROL" -- bash -c "sleep 50; source /opt/ros/humble/setup.bash; source $ROS_WS/install/local_setup.bash; export RMW_IMPLEMENTATION=rmw_fastrtps_cpp; cd $ROS_WS; python3 $PYTHON_SCRIPT; exec bash"
-
-sleep 1
-tmux set-option -t $SESSION_NAME mouse on
-tmux attach-session -t $SESSION_NAME
+echo "source ~/ros2_drone_ws/install/setup.bash" >> ~/.bashrc
 ```
+
+---
+
+### ADIM 3: Otomasyon Scripti (baslat.sh)
+
+`baslat.sh` scripti şunları otomatik olarak yapar:
+
+- **Otomatik IP Tespiti**: Bilgisayarın ağ IP'sini bulur
+- **Agresif Temizlik**: Arkada kalan zombi süreçleri öldürür
+- **Güvenlik İptali**: NAV_DLL_ACT 0 vb. ile kumanda/GCS olmadan uçuş izni verir
+- **Tmux Yönetimi**: Ekranı böler, Agent'ı ve 4 drone'u (1 Master GUI + 3 Slave Headless) başlatır
 
 **Script'i çalıştırılabilir yapma:**
 
@@ -219,221 +125,400 @@ tmux attach-session -t $SESSION_NAME
 chmod +x ~/ros2_drone_ws/baslat.sh
 ```
 
----
+**Dosya Konumu**: `~/ros2_drone_ws/baslat.sh`
 
-## ADIM 4: Python Kontrol Kodu (multi_test.py)
-
-Bu kodda kritik olan düzeltme: `time.sleep(3.0)`. Offboard sinyalinin PX4 tarafından kabul edilmesi için sinyal gönderimi başladıktan sonra mod değişiminden önce 3 saniye bekliyoruz.
-
-**Dosya Konumu**: `~/ros2_drone_ws/src/multi_test.py`
-
-```python
-#!/usr/bin/env python3
-import rclpy
-import threading
-import sys
-import time
-from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleCommand, SensorCombined, VehicleGlobalPosition, VehicleLocalPosition, BatteryStatus
-
-class SafeSwarmController(Node):
-    def __init__(self):
-        super().__init__('safe_swarm_node')
-        self.qos_profile = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=1
-        )
-        self.active_drones = {}
-        self.monitor_sub = None
-        self.print_counter = 0
-        self.monitoring_info = ""
-        self.timer = self.create_timer(0.1, self.timer_callback)
-
-    def get_drone_namespace(self, vehicle_id):
-        return "" if vehicle_id == 0 else f"/px4_{vehicle_id}"
-
-    def register_drone(self, vehicle_id, start_x, start_y):
-        ns = self.get_drone_namespace(vehicle_id)
-        prefix = f"{ns}/fmu/in"
-        print(f"\n[SİSTEM] Drone {vehicle_id} Bağlanıyor...")
-
-        self.active_drones[vehicle_id] = {
-            'pubs': {
-                'offboard': self.create_publisher(OffboardControlMode, f'{prefix}/offboard_control_mode', self.qos_profile),
-                'traj': self.create_publisher(TrajectorySetpoint, f'{prefix}/trajectory_setpoint', self.qos_profile),
-                'cmd': self.create_publisher(VehicleCommand, f'{prefix}/vehicle_command', self.qos_profile)
-            },
-            'target': [float(start_x), float(start_y), -5.0],
-        }
-
-        # KRİTİK NOKTA: Offboard sinyalinin oturması için bekleme
-        print(f"[BEKLİYOR] Drone {vehicle_id} sinyal gönderiyor (3sn)...")
-        time.sleep(3.0) 
-
-        self.set_mode_offboard(vehicle_id)
-        time.sleep(1.0)
-        self.arm_vehicle(vehicle_id)
-        print(f"[BAŞARILI] Drone {vehicle_id} Havalanıyor!")
-
-    def timer_callback(self):
-        timestamp = int(self.get_clock().now().nanoseconds / 1000)
-        for v_id, drone_data in self.active_drones.items():
-            msg_mode = OffboardControlMode()
-            msg_mode.position = True
-            msg_mode.velocity = False
-            msg_mode.acceleration = False
-            msg_mode.timestamp = timestamp
-            drone_data['pubs']['offboard'].publish(msg_mode)
-
-            msg_traj = TrajectorySetpoint()
-            msg_traj.position = drone_data['target']
-            msg_traj.yaw = 0.0
-            msg_traj.velocity = [float('nan')] * 3
-            msg_traj.acceleration = [float('nan')] * 3
-            msg_traj.timestamp = timestamp
-            drone_data['pubs']['traj'].publish(msg_traj)
-
-    def set_mode_offboard(self, v_id):
-        self.publish_cmd(v_id, VehicleCommand.VEHICLE_CMD_DO_SET_MODE, 1., 6.)
-
-    def arm_vehicle(self, v_id):
-        self.publish_cmd(v_id, VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM, 1.0)
-
-    def land_vehicle(self, v_id):
-        self.publish_cmd(v_id, VehicleCommand.VEHICLE_CMD_NAV_LAND)
-
-    def publish_cmd(self, v_id, command, p1=0.0, p2=0.0):
-        if v_id not in self.active_drones: return
-        msg = VehicleCommand()
-        msg.command = command
-        msg.param1 = p1
-        msg.param2 = p2
-        msg.target_system = int(v_id) + 1
-        msg.target_component = 1
-        msg.from_external = True
-        msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
-        self.active_drones[v_id]['pubs']['cmd'].publish(msg)
-    
-    def land_all(self):
-        for v_id in self.active_drones: self.land_vehicle(v_id)
-
-    def update_target(self, v_id, x, y, z):
-        if v_id not in self.active_drones: self.register_drone(v_id, x, y)
-        self.active_drones[v_id]['target'] = [float(x), float(y), float(z)]
-
-def main():
-    rclpy.init()
-    node = SafeSwarmController()
-    threading.Thread(target=rclpy.spin, args=(node,), daemon=True).start()
-    
-    print("SİSTEM HAZIR. Örnek Komut: 0 0 0 -5")
-    
-    while True:
-        try:
-            inp = input("\nKomut > ").strip().lower().split()
-            if not inp: continue
-            if inp[0] in ['q', 'exit']: node.land_all(); break
-            if inp[0] == 'land': 
-                 if len(inp)>1 and inp[1]=='all': node.land_all()
-                 else: node.land_vehicle(int(inp[1]))
-                 continue
-            
-            if len(inp) == 4:
-                node.update_target(int(inp[0]), inp[1], inp[2], inp[3])
-        except Exception as e: print(e)
-
-    node.destroy_node()
-    rclpy.shutdown()
-
-if __name__ == '__main__':
-    main()
-```
-
-**Not**: Bu kod özetlenmiş versiyondur. Tam versiyon için `src/multi_test.py` dosyasına bakınız.
+Script detayları için `baslat.sh` dosyasına bakınız.
 
 ---
 
-## ADIM 5: Çalıştırma
+### ADIM 4: Python Kontrol Kodları
 
-Her şey hazır olduğunda tek yapman gereken:
+#### 4.1. Manuel Kontrol (multi_test.py)
+
+İnteraktif drone kontrolü için:
 
 ```bash
 cd ~/ros2_drone_ws
-./baslat.sh
+source /opt/ros/humble/setup.bash
+source install/local_setup.bash
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+python3 src/multi_test.py
 ```
 
-Açılan Python penceresine `0 0 0 -5` yazarak ilk drone'u kaldırabilirsin.
-
-### Kullanım Örnekleri
-
-**Drone Kontrol Komutları:**
+**Kullanım Örnekleri:**
 - `0 0 0 -5` - Drone 0'ı (0, 0, -5) konumuna gönder
 - `1 2 2 -5` - Drone 1'i (2, 2, -5) konumuna gönder
 - `land 0` - Drone 0'a iniş emri ver
 - `land all` - Tüm dronlara iniş emri ver
 - `q` veya `exit` - Sistemi kapat
 
-**Önemli Notlar:**
-- Z ekseni negatif değerler yukarıyı temsil eder (NED koordinat sistemi)
-- Offboard moduna geçiş için 3 saniye bekleme süresi kritiktir
-- İlk drone (ID: 0) GUI ile başlar, diğerleri headless modda çalışır
+#### 4.2. Otomatik Görev Yönetimi (oto.py)
+
+Paralel multi-mission görevleri için:
+
+```bash
+cd ~/ros2_drone_ws
+source /opt/ros/humble/setup.bash
+source install/local_setup.bash
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+python3 src/oto.py
+```
+
+**Görev Senaryoları:**
+- **Grup A (0,1)**: Nesne Tespiti (Sabit Gözlem)
+- **Grup B (2,3)**: Alan Tarama (Grid Pattern)
+- **Grup C (4,5)**: Hedef İmha (Dalış Manevrası)
 
 ---
 
-## 🛠️ Sistem Gereksinimleri
+### ADIM 5: Sistem Başlatma
 
-- **OS**: Ubuntu 22.04 LTS (veya Ubuntu 20.04+)
-- **ROS 2**: Humble
-- **Gazebo**: Harmonic
-- **PX4**: SITL (Software In The Loop)
-- **Python**: 3.8+
-- **RAM**: Minimum 8GB (16GB önerilir)
-- **CPU**: Çok çekirdekli işlemci önerilir
+#### 5.1. Simülasyonu Başlatma
 
-## 📁 Proje Yapısı
+```bash
+cd ~/ros2_drone_ws
+./baslat.sh
+```
+
+#### 5.2. Kontrol Scriptini Çalıştırma
+
+Simülasyon başladıktan 50 saniye sonra otomatik olarak Python kontrol penceresi açılır. Manuel başlatmak için:
+
+```bash
+# Yeni terminal
+cd ~/ros2_drone_ws
+source /opt/ros/humble/setup.bash
+source install/local_setup.bash
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+python3 src/multi_test.py  # veya src/oto.py
+```
+
+---
+
+## Sistem Mimarisi
+
+### Bileşenler
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              ROS 2 Humble (Middleware)                  │
+│              Micro XRCE-DDS Agent (Port 8888)          │
+└──────────────────┬──────────────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────────────┐
+│         Python Kontrol Node (multi_test.py/oto.py)      │
+│         - Offboard Control Mode Publisher               │
+│         - Trajectory Setpoint Publisher                 │
+│         - Vehicle Command Publisher                     │
+│         - Position Subscriber                          │
+└──────────────────┬──────────────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────────────┐
+│              PX4 Autopilot (SITL)                       │
+│              - Flight Control                           │
+│              - State Estimation                         │
+│              - Mission Management                       │
+└──────────────────┬──────────────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────────────┐
+│         Gazebo Harmonic (Simulation)                    │
+│         - Baylands World                                │
+│         - x500 Quadcopter Model                        │
+│         - Physics Engine                                │
+└─────────────────────────────────────────────────────────┘
+```
+
+### İletişim Protokolleri
+
+- **ROS 2 Topics**: `/fmu/in/*` ve `/fmu/out/*` (PX4 mesajları)
+- **MAVLink**: UDP port 14550-14559 (QGroundControl için)
+- **Micro XRCE-DDS**: UDP port 8888 (ROS 2 - PX4 köprüsü)
+
+### Drone Konfigürasyonu
+
+| Drone ID | Namespace | MAVLink Port | Başlangıç Pozisyonu |
+|----------|-----------|-------------|---------------------|
+| 0        | `/fmu/in` | 14556       | (0, 0)              |
+| 1        | `/px4_1`  | 14557       | (2, 2)              |
+| 2        | `/px4_2`  | 14558       | (-2, 2)             |
+| 3        | `/px4_3`  | 14559       | (0, -2)             |
+
+---
+
+## Görev Senaryoları
+
+### Senaryo 1: Manuel Kontrol (multi_test.py)
+
+Kullanıcı interaktif olarak her drone'u kontrol eder:
+
+1. **Kalkış**: Her drone başlangıç pozisyonunda 5m yüksekliğe çıkar
+2. **Formasyon**: Manuel komutlarla formasyon oluşturulur
+3. **Görev**: Kullanıcı tarafından belirlenen waypoint'lere gidilir
+4. **İniş**: `land` komutu ile iniş yapılır
+
+### Senaryo 2: Otomatik Formasyon ve Tarama (oto.py - Eski Versiyon)
+
+Otomatik görev yönetimi:
+
+1. **TAKEOFF**: Tüm dronlar kalkış yapar
+2. **FORMING**: Kare formasyon oluşturulur
+3. **MOVING_TO_SCAN**: Hedef tarama alanına gidilir
+4. **SCANNING**: Grid pattern ile alan taranır
+5. **RETURNING**: Yuvaya (başlangıç pozisyonuna) dönülür
+6. **LANDING**: Otomatik iniş yapılır
+
+### Senaryo 3: Paralel Multi-Mission (oto.py - Yeni Versiyon)
+
+Eş zamanlı farklı görevler:
+
+**Grup A (Drone 0, 1)**: Nesne Tespiti
+- Hedef bölgeye intikal
+- Sabit gözlem pozisyonunda kalma
+- 40 saniye gözlem süresi
+
+**Grup B (Drone 2, 3)**: Alan Tarama
+- Grid pattern ile sistematik tarama
+- 4 köşe noktasında zikzak hareket
+- Formasyon korunarak tarama
+
+**Grup C (Drone 4, 5)**: Hedef İmha
+- Uzak hedefe intikal
+- 30m'den 5m'ye dalış manevrası
+- Hızlı yükseliş ve geri çekilme
+
+**Tüm Gruplar**: Eve Dönüş (RTL)
+- Her drone kendi başlangıç pozisyonuna döner
+- Otomatik iniş
+
+---
+
+## Görsel Dokümantasyon
+
+### Sistem Kurulumu ve Başlatma
+
+![Sistem Başlatma](Pictures/04_system_setup_initialization.png)
+*Şekil 1: Sistem başlatma ve ilk kurulum ekranı*
+
+![Gazebo Launch](Pictures/05_gazebo_launch_baylands.png)
+*Şekil 2: Gazebo Harmonic Baylands dünyasının başlatılması*
+
+![Drone Spawn](Pictures/06_drone_spawn_positions.png)
+*Şekil 3: Dronların başlangıç pozisyonlarında spawn edilmesi*
+
+### Offboard Kontrol ve Arm
+
+![Offboard Mode](Pictures/07_offboard_mode_activation.png)
+*Şekil 4: Offboard modunun etkinleştirilmesi*
+
+![Arm Sequence](Pictures/08_arm_sequence.png)
+*Şekil 5: Drone'ların arm edilme sırası*
+
+![Takeoff](Pictures/09_takeoff_sequence.png)
+*Şekil 6: Kalkış sekansı ve yüksekliğe çıkış*
+
+### Formasyon ve Hareket
+
+![Formation Square](Pictures/10_formation_square.png)
+*Şekil 7: Kare formasyon oluşturulması*
+
+![Formation Movement](Pictures/11_formation_movement.png)
+*Şekil 8: Formasyon korunarak hareket*
+
+![Scan Area Approach](Pictures/12_scan_area_approach.png)
+*Şekil 9: Tarama alanına yaklaşım*
+
+### Tarama Görevi
+
+![Grid Scan Pattern](Pictures/13_grid_scan_pattern.png)
+*Şekil 10: Grid pattern ile alan taraması*
+
+![Scan Completion](Pictures/14_scan_completion.png)
+*Şekil 11: Tarama görevinin tamamlanması*
+
+![Return to Home](Pictures/15_return_to_home.png)
+*Şekil 12: Yuvaya dönüş (RTL) sekansı*
+
+### Multi-Mission Senaryoları
+
+![Group A Detect](Pictures/16_multi_mission_group_a_detect.jpeg)
+*Şekil 13: Grup A - Nesne tespiti görevi*
+
+![Group B Scan](Pictures/17_multi_mission_group_b_scan.jpeg)
+*Şekil 14: Grup B - Alan tarama görevi*
+
+![Group C Attack](Pictures/18_multi_mission_group_c_attack.jpeg)
+*Şekil 15: Grup C - Hedef imha görevi*
+
+![Parallel Execution](Pictures/19_parallel_mission_execution.jpeg)
+*Şekil 16: Paralel görev yürütme durumu*
+
+![Formation Coordination](Pictures/20_formation_coordination.jpeg)
+*Şekil 17: Formasyon koordinasyonu*
+
+![Mission Status](Pictures/21_mission_completion_status.jpeg)
+*Şekil 18: Görev tamamlanma durumu*
+
+![RTL Sequence](Pictures/22_rtl_sequence.jpeg)
+*Şekil 19: Eve dönüş (RTL) sekansı*
+
+![Landing](Pictures/23_landing_sequence.jpeg)
+*Şekil 20: İniş sekansı*
+
+### Konsept Görseller
+
+![AI Concept 1](Pictures/01_ai_generated_concept_01.png)
+*Şekil 21: AI üretimi konsept görsel 1*
+
+![AI Concept 2](Pictures/02_ai_generated_concept_02.png)
+*Şekil 22: AI üretimi konsept görsel 2*
+
+![AI Concept 3](Pictures/03_ai_generated_concept_03.png)
+*Şekil 23: AI üretimi konsept görsel 3*
+
+---
+
+## Test Sonuçları
+
+### Başarılı Test Senaryoları
+
+✅ **4 Drone Eş Zamanlı Kontrol**
+- Tüm dronlar başarıyla arm edildi
+- Offboard moduna geçiş başarılı
+- Formasyon oluşturma başarılı
+
+✅ **Grid Pattern Tarama**
+- 20m x 20m alan başarıyla tarandı
+- Formasyon korunarak hareket edildi
+- Tüm waypoint'lere ulaşıldı
+
+✅ **Paralel Multi-Mission**
+- 3 grup eş zamanlı görev yürüttü
+- Threading ile koordinasyon başarılı
+- Eve dönüş ve iniş başarılı
+
+### Bilinen Sorunlar ve Çözümler
+
+⚠️ **Sorun**: Bazı dronlar havalanmıyor
+- **Neden**: Namespace veya offboard sinyal zamanlaması
+- **Çözüm**: 3 saniye bekleme süresi ve doğru namespace kullanımı
+
+⚠️ **Sorun**: Gazebo başlamıyor
+- **Neden**: Eski Gazebo Classic kurulu olabilir
+- **Çözüm**: Gazebo Harmonic kurulumu ve `make distclean`
+
+⚠️ **Sorun**: ROS 2 mesajları gelmiyor
+- **Neden**: MicroXRCEAgent çalışmıyor veya RMW yanlış
+- **Çözüm**: Agent'ı başlat ve `RMW_IMPLEMENTATION=rmw_fastrtps_cpp` kullan
+
+---
+
+## Sorun Giderme
+
+### Gazebo Başlamıyor
+
+```bash
+# Gazebo versiyonunu kontrol et
+gz sim --version
+
+# Eski derlemeyi temizle
+cd ~/PX4-Autopilot
+make distclean
+make px4_sitl gz_x500
+```
+
+### Drone'lar Bağlanmıyor
+
+```bash
+# MicroXRCEAgent'ı kontrol et
+ps aux | grep MicroXRCEAgent
+
+# ROS 2 topic'lerini kontrol et
+source /opt/ros/humble/setup.bash
+source ~/ros2_drone_ws/install/local_setup.bash
+ros2 topic list
+
+# RMW implementation'ı kontrol et
+echo $RMW_IMPLEMENTATION  # rmw_fastrtps_cpp olmalı
+```
+
+### Offboard Moduna Geçemiyor
+
+- 3 saniye bekleme süresinin yeterli olduğundan emin olun
+- PX4 parametrelerinin doğru ayarlandığını kontrol edin:
+  - `NAV_DLL_ACT = 0`
+  - `COM_RCL_ACT = 0`
+  - `NAV_RCL_ACT = 0`
+
+### Performans Sorunları
+
+- **Yavaş Simülasyon**: CPU/GPU kullanımını kontrol edin
+- **Yüksek RAM Kullanımı**: Daha az drone ile test edin
+- **Lag**: Gazebo görselleştirmeyi kapatın (headless mode)
+
+---
+
+## Sistem Gereksinimleri
+
+| Bileşen | Minimum | Önerilen |
+|---------|---------|-----------|
+| **OS** | Ubuntu 20.04 | Ubuntu 22.04 LTS |
+| **RAM** | 8GB | 16GB |
+| **CPU** | 4 çekirdek | 8+ çekirdek |
+| **GPU** | Entegre | Ayrık GPU |
+| **Disk** | 20GB boş alan | 50GB boş alan |
+
+---
+
+## Proje Yapısı
 
 ```
 ros2_drone_ws/
 ├── src/
-│   ├── multi_test.py          # Ana kontrol scripti
+│   ├── multi_test.py          # Manuel kontrol scripti
+│   ├── oto.py                 # Otomatik multi-mission scripti
+│   ├── offboard_test.py       # Tek drone test scripti
 │   └── px4_msgs/              # PX4 mesaj tanımları
-├── baslat.sh                   # Otomasyon scripti
-├── install/                    # Derlenmiş paketler
+├── Pictures/                   # Görsel dokümantasyon
+│   ├── 01-15_*.png            # Sistem ve görev ekran görüntüleri
+│   └── 16-23_*.jpeg           # Multi-mission görselleri
+├── baslat.sh                   # Otomasyon başlatma scripti
+├── install/                    # Derlenmiş ROS 2 paketleri
+├── build/                      # Build dosyaları
 └── README.md                   # Bu dosya
 ```
 
-## 🐛 Sorun Giderme
+---
 
-### Gazebo başlamıyor
-- Gazebo Harmonic'in doğru kurulduğundan emin ol: `gz sim --version`
-- PX4 derlemesini temizle ve yeniden derle: `make distclean && make px4_sitl gz_x500`
-
-### Drone'lar bağlanmıyor
-- MicroXRCEAgent'ın çalıştığından emin ol (tmux pane 0)
-- ROS 2 ortamının kaynaklandığından emin ol
-- `RMW_IMPLEMENTATION=rmw_fastrtps_cpp` export edildiğinden emin ol
-
-### Offboard moduna geçemiyor
-- 3 saniye bekleme süresinin yeterli olduğundan emin ol
-- PX4 parametrelerinin doğru ayarlandığından emin ol (NAV_DLL_ACT, COM_RCL_ACT, NAV_RCL_ACT)
-
-## 📚 Kaynaklar
+## Kaynaklar ve Referanslar
 
 - [PX4 Documentation](https://docs.px4.io/)
-- [ROS 2 Documentation](https://docs.ros.org/en/humble/)
-- [Gazebo Documentation](https://gazebosim.org/docs)
+- [ROS 2 Humble Documentation](https://docs.ros.org/en/humble/)
+- [Gazebo Harmonic Documentation](https://gazebosim.org/docs)
 - [Micro XRCE-DDS](https://micro-xrce-dds.readthedocs.io/)
-
-## 👤 Yazar
-
-**Ömer Faruk Çelik**
-- Student ID: 220260138
-- Advisor: Prof. Dr. Gülşah Karaduman
-- Institution: Computer Engineering Design Project
+- [MAVLink Protocol](https://mavlink.io/)
 
 ---
 
-**İyi çalışmalar! 🚁**
+## Yazar Bilgileri
+
+**Ömer Faruk Çelik**
+- **Öğrenci No**: 220260138
+- **Danışman**: Prof. Dr. Gülşah Karaduman
+- **Kurum**: Bilgisayar Mühendisliği Tasarım Projesi
+- **Tarih**: 2026
+
+---
+
+## Lisans
+
+Bu proje MIT lisansı altında lisanslanmıştır.
+
+---
+
+**Son Güncelleme**: 5 Ocak 2026
+
+**Versiyon**: 2.0 - Multi-Mission Support
+
+---
+
+*İyi çalışmalar! 🚁*
